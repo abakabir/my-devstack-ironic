@@ -1,0 +1,405 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Set build type and version
+BUILD_TYPE="COMPLETE" # Set build type to "BASE", "STAGED" or "COMPLETE" based on your build need
+BUILD_VERSION="STABLE" # Set build version to "STABLE" or "DEV" to enable or disable experimental features
+
+# Set installation settings
+STACK_HOME="/home/vagrant" # DevStack home directory
+INSTALL_DIR="/opt/stack" # DevStack installation location
+INSTANCES_PATH="#{INSTALL_DIR}/instances" # Guest instances location
+LOG_DIR="/opt/stack/logs" # DevStack log location
+STACK_LOG="#{LOG_DIR}/stack.sh.log" # Stack.sh log file
+
+# Set OS config
+OS_HOSTNAME="DEVSTACK-#{BUILD_VERSION}-#{BUILD_TYPE}" # Hostname for the OS, defaults to devstack + build version + build type
+NIC3_PROMISCUOUS="true" # Leave true for Neutron flat / bridged configurations
+
+# Host OS image config
+VB_IMAGE_SOURCE="HASHI" # Set to either "HASHI" to use the default Hashicorp syntax, "ubuntu/trusty64", or "URL" to use url syntax, http://cloud-images.ubuntu.com/vagrant/trusty...
+VB_IMAGE_NAME="ubuntu/trusty64" # The latest VirtualBox image of Trusty server 64 bit from Ubuntu
+VB_IMAGE_URL="https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-amd64-vagrant-disk1.box" # Populate if you are pulling your own image
+
+# Set network config
+VAGRANT_NETWORK="10.0.2" # Vagrant (NAT / default gateway) network
+MANAGEMENT_NETWORK="192.168.34" # Management network
+PUBLIC_NETWORK="192.168.28" # Neutron gateway / provider network
+PRIVATE_NETWORK="10.0.0" # Private network CIDR
+DEFAULT_MASK="255.255.255.0" # Defualt /24 network mask unless specified otherwise
+DNS="10.0.2.3" # Default DNS server for your subnets, e.g. local VirtualBox forwarder
+
+# Set DevStack base config
+HOST_IP="#{MANAGEMENT_NETWORK}.2" # Management IP, ssh to the OS, OpenStack APIs, etc.
+DEVSTACK_BRANCH="master" # Devstack branch to synch to, defaults to "master"
+DEVSTACK_PASSWORD="stack" # Password for all devstack services and logins
+
+# Set OpenStack image / flavor config
+DEFAULT_NOVA_IMAGE="cirros-0.3.4-x86_64-uec" # Used for all instance builds unless specified otherwise
+DEFAULT_NOVA_FLAVOR_NAME="m1.micro" # Default is 1, m1.tiny, set to custom flavor - 1 vcpu x 64 mb ram x 1 gb disk
+DEFAULT_NOVA_FLAVOR_ID="6" # Default is 1, m1.tiny, currently set to a custom flavor built during install, 6
+
+# Set OpenStack neutron config, get OpenStack neutron guids
+FLAT_NEUTRON_INTERFACE="eth2" # Interface that Neutron bridges to, don't change this unless you understand the impact
+PUBLIC_NEUTRON_INTERFACE="eth2" # Interface that Neutron routes and nats through, don't change this unless you understand the impact
+OVS_EXTERNAL_BRIDGE="br-ex" # Neutron external bridge
+OVS_INTERNAL_BRIDGE="br-int" # Neutron external bridge
+OVS_TUNNEL_BRIDGE="br-tun" # Neutron external bridge
+PUBLIC_NETWORK_NAME="public" # What to name the public network
+PUBLIC_SUBNET_NAME="public-subnet" # Give the public subnet a name, defaults to "public-subnet"
+PRIVATE_NETWORK_NAME="private" # What to name the public network
+PRIVATE_SUBNET_NAME="private-subnet" # Give the public subnet a name, defaults to "public-subnet"
+
+# Set OpenStack security config
+SSH_KEY_NAME="vagrant" # Name of the nova keypair that will be created
+SSH_KEY_PATH="#{STACK_HOME}/.ssh/id_rsa" # Private key location of the key generated for the nova keypair
+SECURITY_GROUP_NAME="default" # Name of the security group to add rules to
+SECURITY_GROUP_RULES="21 22 80 443" # List of ports to open up in the default security group
+
+
+# VirtualBox config
+VB_HOSTNAME="#{OS_HOSTNAME}" # Hostname label within VirtualBox, defaults to matching the OS_HOSTNAME
+CPU="1" # Number of virtual CPUs, 1 seems to run faster than 2 as VirtualBox is a hypervisor that runs in userland, i.e. poor virtual SMP
+RAM="6144" # System memory
+VT_X="false" # Intel / AMD VT acceleration, inconsistent performance when testing with this build
+APIC_IO="false" # Network IO acceleration, inconsistent performance when testing with this build
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+  # The most common configuration options are documented and commented below.
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # Every Vagrant development environment requires a box. You can search for
+  # boxes at https://vagrantcloud.com/search.
+  config.vm.box = "ubuntu/xenial64"
+
+  # Disable automatic box update checking. If you disable this, then
+  # boxes will only be checked for updates when the user runs
+  # `vagrant box outdated`. This is not recommended.
+  # config.vm.box_check_update = false
+
+  # Create a forwarded port mapping which allows access to a specific port
+  # within the machine from a port on the host machine. In the example below,
+  # accessing "localhost:8080" will access port 80 on the guest machine.
+  # NOTE: This will enable public access to the opened port
+  # config.vm.network "forwarded_port", guest: 80, host: 8080
+
+  # Create a forwarded port mapping which allows access to a specific port
+  # within the machine from a port on the host machine and only allow access
+  # via 127.0.0.1 to disable public access
+  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+
+  # Create a private network, which allows host-only access to the machine
+  # using a specific IP.
+  # config.vm.network "private_network", ip: "192.168.33.10"
+
+  config.vm.network :private_network, ip: "#{HOST_IP}", netmask: "#{DEFAULT_MASK}"
+  config.vm.network :private_network, ip: "#{PUBLIC_NETWORK}.2", netmask: "#{DEFAULT_MASK}", auto_config: false
+  # Create a public network, which generally matched to bridged network.
+  # Bridged networks make the machine appear as another physical device on
+  # your network.
+  # config.vm.network "public_network"
+
+  # Share an additional folder to the guest VM. The first argument is
+  # the path on the host to the actual folder. The second argument is
+  # the path on the guest to mount the folder. And the optional third
+  # argument is a set of non-required options.
+  # config.vm.synced_folder "../data", "/vagrant_data"
+
+  # Provider-specific configuration so you can fine-tune various
+  # backing providers for Vagrant. These expose provider-specific options.
+  # Example for VirtualBox:
+  config.vm.provider :virtualbox do |vb|
+
+    # Lable the virtual machine
+    vb.name="#{VB_HOSTNAME}"
+
+    # Enable the Virtual Box GUI on boot, i.e. not "headless"
+
+    # Set CPU and memoru size
+    vb.customize ["modifyvm", :id, "--cpus", "#{CPU}"]
+    vb.customize ["modifyvm", :id, "--memory", "#{RAM}"]
+
+    # Enable promiscuous mode on eth2 for floating IPs to be accessible
+    if "#{NIC3_PROMISCUOUS}" == "true"
+      vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+    end
+
+    # Suppress tty messages
+    # config.vm.provision "fix-no-tty", type: "shell" do |s|
+    #   s.privileged="false"
+    #   s.inline="sudo sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
+    # end
+
+  end
+
+
+  # config.vm.provider "virtualbox" do |vb|
+  #   # Display the VirtualBox GUI when booting the machine
+  #   vb.gui = true
+  #
+  #   # Customize the amount of memory on the VM:
+  #   vb.memory = "1024"
+  # end
+  #
+
+  # View the documentation for the provider you are using for more
+  # information on available options.
+
+  # Enable provisioning with a shell script. Additional provisioners such as
+  # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
+  # documentation for more information about their specific syntax and use.
+config.vm.provision "shell", inline: <<-SHELL
+#yum update -y
+#yum install -y python-openstackclient
+#yum install -y  git
+# Install some dependencies and tools
+apt-get update
+apt-get -y install git nmap traceroute
+# Clone the devstack repo
+git clone https://github.com/openstack-dev/devstack.git #{STACK_HOME}/devstack
+
+
+######################################################################################
+#    PRE-DEVSTACK PREP WORK INSTALL COMPLETE, BEGINNING DEVSTACK CONFIG AND SETUP    #
+######################################################################################
+
+# Configure devstack
+cd #{STACK_HOME}/devstack
+cat << CONF > #{STACK_HOME}/devstack/local.conf
+[[local|localrc]]
+HOST_IP=#{HOST_IP}
+DEVSTACK_BRANCH=#{DEVSTACK_BRANCH}
+DEVSTACK_PASSWORD=#{DEVSTACK_PASSWORD}
+
+# Extra config options
+# EXTRA_OPTS=(metadata_host=#{HOST_IP})
+# Q_DHCP_EXTRA_DEFAULT_OPTS=(enable_metadata_network=True enable_isolated_metadata=True)
+# Disable ipv6
+# IP_VERSION=4
+
+# Set branch for services
+KEYSTONE_BRANCH=#{DEVSTACK_BRANCH}
+NOVA_BRANCH=#{DEVSTACK_BRANCH}
+PUBLIC_BRANCH=#{DEVSTACK_BRANCH}
+SAHARA_BRANCH=#{DEVSTACK_BRANCH}
+TROVE_BRANCH=#{DEVSTACK_BRANCH}
+GLANCE_BRANCH=#{DEVSTACK_BRANCH}
+CINDER_BRANCH=#{DEVSTACK_BRANCH}
+HEAT_BRANCH=#{DEVSTACK_BRANCH}
+HORIZON_BRANCH=#{DEVSTACK_BRANCH}
+
+# Default passwords
+ADMIN_PASSWORD=#{DEVSTACK_PASSWORD}
+MYSQL_PASSWORD=#{DEVSTACK_PASSWORD}
+RABBIT_PASSWORD=#{DEVSTACK_PASSWORD}
+SERVICE_PASSWORD=#{DEVSTACK_PASSWORD}
+SERVICE_TOKEN=#{DEVSTACK_PASSWORD}
+SWIFT_HASH=#{DEVSTACK_PASSWORD}
+SWIFT_TEMPURL_KEY=#{DEVSTACK_PASSWORD}
+
+# Enable Ironic plugin
+#enable_plugin ironic https://git.openstack.org/openstack/ironic
+enable_plugin ironic https://github.com/openstack/ironic stable/queens
+
+#SCREEN_LOGDIR=#{LOG_DIR}
+#LOGFILE=#{STACK_LOG}
+INSTANCES_PATH=#{INSTANCES_PATH}
+
+# Disable unwanted services
+# Disable nova network
+disable_service n-net
+# Disable tempest
+disable_service tempest
+# Disable sahara
+disable_service sahara
+# Disable trove
+disable_service trove
+disable_service tr-api
+disable_service tr-mgr
+disable_service tr-cond
+# Disable swift
+#disable_service s-proxy
+#disable_service s-object
+#disable_service s-container
+#disable_service s-account
+# Disable cinder
+disable_service cinder
+disable_service c-api
+disable_service c-vol
+disable_service c-sch
+disable_service c-bak
+
+# Disable Heat
+disable_service heat h-api h-api-cfn h-api-cw h-eng
+
+
+
+# Enable Cinder services
+# enable_service cinder
+# enable_service c-api
+# enable_service c-vol
+# enable_service c-sch
+# enable_service c-bak
+
+# Configure Cinder services
+# VOLUME_GROUP="stack-volumes"
+# VOLUME_NAME_PREFIX="volume-"
+# VOLUME_BACKING_FILE_SIZE=250M
+
+# Enable Database Backend MySQL
+enable_service mysql
+
+# Enable RPC Backend RabbitMQ
+enable_service rabbit
+
+# Enable Keystone - OpenStack Identity Service
+enable_service key
+
+# Enable Horizon - OpenStack Dashboard Service
+enable_service horizon
+
+# Enable Glance - OpenStack Image Registry service
+enable_service g-api
+enable_service g-reg
+
+# Enable Neutron
+enable_service q-svc
+enable_service q-agt
+enable_service q-dhcp
+enable_service q-l3
+enable_service q-meta
+enable_service neutron
+
+# Enable Swift for agent_* drivers
+enable_service s-proxy
+enable_service s-object
+enable_service s-container
+enable_service s-account
+
+# Swift temp URL's are required for agent_* drivers.
+SWIFT_ENABLE_TEMPURLS=True
+
+# Create 3 virtual machines to pose as Ironic's baremetal nodes.
+IRONIC_VM_COUNT=3
+IRONIC_BAREMETAL_BASIC_OPS=True
+DEFAULT_INSTANCE_TYPE=baremetal
+
+# Enable Ironic drivers.
+#IRONIC_ENABLED_DRIVERS=fake,agent_ipmitool,pxe_ipmitool
+
+# Enable additional hardware types, if needed.
+#IRONIC_ENABLED_HARDWARE_TYPES=ipmi,fake-hardware
+# Don't forget that many hardware types require enabling of additional
+# interfaces, most often power and management:
+#IRONIC_ENABLED_MANAGEMENT_INTERFACES=ipmitool,fake
+#IRONIC_ENABLED_POWER_INTERFACES=ipmitool,fake
+# The 'ipmi' hardware type's default deploy interface is 'iscsi'.
+# This would change the default to 'direct':
+#IRONIC_DEFAULT_DEPLOY_INTERFACE=direct
+#
+
+# Change this to alter the default driver for nodes created by devstack.
+# This driver should be in the enabled list above.
+IRONIC_DEPLOY_DRIVER=ipmi
+
+# The parameters below represent the minimum possible values to create
+# functional nodes.
+IRONIC_VM_SPECS_RAM=1280
+IRONIC_VM_SPECS_DISK=10
+
+# Size of the ephemeral partition in GB. Use 0 for no ephemeral partition.
+IRONIC_VM_EPHEMERAL_DISK=0
+
+# To build your own IPA ramdisk from source, set this to True
+IRONIC_BUILD_DEPLOY_RAMDISK=False
+
+VIRT_DRIVER=ironic
+
+
+# Configure Neutron
+FLAT_INTERFACE=#{FLAT_NEUTRON_INTERFACE}
+PUBLIC_INTERFACE=#{PUBLIC_NEUTRON_INTERFACE}
+FIXED_RANGE=#{PRIVATE_NETWORK}.0/24
+FLOATING_RANGE=#{PUBLIC_NETWORK}.0/24
+PUBLIC_NETWORK_GATEWAY=#{PUBLIC_NETWORK}.2
+Q_FLOATING_ALLOCATION_POOL=start=#{PUBLIC_NETWORK}.3,end=#{PUBLIC_NETWORK}.254
+OVS_PHYSICAL_BRIDGE=#{OVS_EXTERNAL_BRIDGE}
+
+# Log all output to files
+#LOGFILE=$HOME/devstack.log
+#LOGDIR=$HOME/logs
+#IRONIC_VM_LOG_DIR=$HOME/ironic-bm-logs
+CONF
+
+# Set passwords
+echo "" ; echo "Setting passwords..."
+echo root:#{DEVSTACK_PASSWORD} | chpasswd
+echo vagrant:#{DEVSTACK_PASSWORD} | chpasswd
+grep root /etc/passwd
+grep vagrant /etc/passwd
+
+# fix permissions as the cloned repo is owned by root
+echo "" ; echo "Updating permissions on #{STACK_HOME}"
+chown -R vagrant:vagrant #{STACK_HOME}
+
+# Add credentials to Vagrant's bash profile
+echo "" ; echo "Adding openrc credentials to #{STACK_HOME}/.bash_profile"
+echo "source #{STACK_HOME}/devstack/openrc admin demo" >> #{STACK_HOME}/.bash_profile
+cat #{STACK_HOME}/.bash_profile
+
+# fix routing so that VMs can reach out to the internets
+echo "" ; echo "Fixing routing so that #{PRIVATE_NETWORK}.0/24 can see #{PUBLIC_NETWORK}.0/24"
+cat << SYSCTL > /etc/sysctl.d/60-devstack.conf
+net.ipv4.conf.eth0.proxy_arp=1
+net.ipv4.ip_forward=1
+SYSCTL
+cat /etc/sysctl.d/60-devstack.conf
+
+echo "" ; echo "Applying new routing, interface rules, etc."
+sysctl --system
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# bring up #{FLAT_NEUTRON_INTERFACE}
+echo "" ; echo "Bringing up #{FLAT_NEUTRON_INTERFACE}..."
+ip link set dev #{FLAT_NEUTRON_INTERFACE} up
+echo "" ; echo "Bringing up #{FLAT_NEUTRON_INTERFACE} results:"
+echo "" ; ifconfig #{FLAT_NEUTRON_INTERFACE}
+
+ifconfig
+
+# setup devstack
+echo "" ; echo "Setting up DevStack..."
+sed -i 's/grub-efi-amd64-signed/grub2-efi/g' /opt/stack/ironic/devstack/lib/ironic
+cd #{STACK_HOME}/devstack
+sudo -u vagrant env HOME=#{STACK_HOME} ./stack.sh
+
+# fix network setup to make VMs pingable from inside and outside devstack
+echo "" ; echo "Fix network setup to make VMs pingable from inside and outside devstack"
+ovs-vsctl add-port #{OVS_EXTERNAL_BRIDGE} #{FLAT_NEUTRON_INTERFACE}
+
+# Setup the #{FLAT_NEUTRON_INTERFACE} interfaces file
+cat << #{FLAT_NEUTRON_INTERFACE} > /etc/network/interfaces.d/#{FLAT_NEUTRON_INTERFACE}.cfg
+auto #{FLAT_NEUTRON_INTERFACE}
+iface #{FLAT_NEUTRON_INTERFACE} inet manual
+#{FLAT_NEUTRON_INTERFACE}
+cat /etc/network/interfaces.d/#{FLAT_NEUTRON_INTERFACE}.cfg
+
+# Setup the #{OVS_EXTERNAL_BRIDGE} interfaces file
+cat << #{OVS_EXTERNAL_BRIDGE} > /etc/network/interfaces.d/#{OVS_EXTERNAL_BRIDGE}.cfg
+auto #{OVS_EXTERNAL_BRIDGE}
+iface #{OVS_EXTERNAL_BRIDGE} inet static
+address #{PUBLIC_NETWORK}.2
+netmask #{DEFAULT_MASK}
+up ip route add #{PRIVATE_NETWORK}.0/24 via #{PUBLIC_NETWORK}.3 dev #{OVS_EXTERNAL_BRIDGE}
+#{OVS_EXTERNAL_BRIDGE}
+cat /etc/network/interfaces.d/#{OVS_EXTERNAL_BRIDGE}.cfg
+
+# Begin post tasks
+cd "#{STACK_HOME}"
+
+SHELL
+end
